@@ -4,6 +4,10 @@ import os
 from urllib import request, error
 import zipfile
 import shutil
+import torchvision.transforms as transforms
+
+from utils import config
+from utils.dataset import KITTI
 
 def download_data(file):
     print(f'downloading {file}...')
@@ -75,6 +79,14 @@ def main():
     training_sequence_paths = dataset_paths[:split_loc]
     testing_sequence_paths = dataset_paths[split_loc:]
 
+    # transforms that need to be done on the data when retrieved from the disk as PIL Image
+    transform_all = transforms.Compose([
+        transforms.Resize((128, 384)),
+        transforms.ToTensor(),
+    ])
+
+    dataset_train = KITTI(sequence_paths=training_sequence_paths)
+    dataset_test = KITTI(sequence_paths=testing_sequence_paths)
 
 if __name__ == '__main__':
     main()
