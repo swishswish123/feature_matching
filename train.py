@@ -4,7 +4,9 @@ import os
 from urllib import request, error
 import zipfile
 import shutil
+
 import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
 
 from utils import config
 from utils.dataset import KITTI
@@ -87,6 +89,22 @@ def main():
 
     dataset_train = KITTI(sequence_paths=training_sequence_paths)
     dataset_test = KITTI(sequence_paths=testing_sequence_paths)
+
+    print(f"[INFO] found {len(dataset_train)} examples in the training set...")
+    print(f"[INFO] found {len(dataset_test)} examples in the test set...")
+
+
+    # create the training and test data loaders
+    train_loader = DataLoader(dataset_train, shuffle=True,
+                              # since we want samples from all classes to be uniformly present in a batch which is important for optimal learning and convergence of batch gradient-based optimization approaches.
+                              batch_size=config.BATCH_SIZE,
+                              pin_memory=config.PIN_MEMORY,
+                              num_workers=os.cpu_count())
+    test_loader = DataLoader(dataset_test, shuffle=False,
+                             batch_size=config.BATCH_SIZE,
+                             pin_memory=config.PIN_MEMORY,
+                             num_workers=os.cpu_count())
+
 
 if __name__ == '__main__':
     main()
