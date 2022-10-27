@@ -4,11 +4,15 @@ import os
 from urllib import request, error
 import zipfile
 import shutil
+import time
+from tqdm import tqdm
+import numpy as np
 
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torch import nn
 from torch.optim import AdamW
+import torch
 
 from utils import config
 from utils.dataset import KITTI
@@ -55,6 +59,38 @@ def cleaning_data_dirs(new_data_dir):
     return
 
 
+def train(unet, train_loader, loss_function, optimizer):
+    # set the model in training mode
+    unet.train()
+
+    # initialize the total training loss
+    total_train_loss = 0
+    # loop over the training set
+    # we iterate over our trainLoader dataloader, which provides a batch of samples at a time
+    for (i_batch, (input_imgs, label)) in enumerate(train_loader):
+
+        # send the input to the device we are training our model on
+        (input_imgs, label) = (input_imgs.to(config.DEVICE), label.to(config.DEVICE))
+
+        # pass input images through unet to get prediction of interpolation
+        prediction = unet(input_imgs)
+
+        # compute loss between model prediction and ground truth label
+        print(f'label min: {torch.min(label)}, max of label: {torch.max(label)}')
+        print(f'label min: {torch.min(prediction)}, max of label: {torch.max(prediction)}')
+        loss = loss_function(prediction, label)
+
+        # update the parameters of model
+        optimizer.zero_grad() # getting rid of previously accumulated gradients from previous steps
+        loss.backward() # backpropagation
+        optimizer.step() # update model params
+
+        # add the loss to the total training loss so far
+        total_train_loss += loss
+
+    return total_train_loss
+
+
 def main():
 
     # --- DATA DOWNLOAD
@@ -90,8 +126,8 @@ def main():
         transforms.ToTensor(),
     ])
 
-    dataset_train = KITTI(sequence_paths=training_sequence_paths)
-    dataset_test = KITTI(sequence_paths=testing_sequence_paths)
+    dataset_train = KITTI(sequence_paths=training_sequence_paths, transform = transform_all)
+    dataset_test = KITTI(sequence_paths=testing_sequence_paths, transform = transform_all)
 
     print(f"[INFO] found {len(dataset_train)} examples in the training set...")
     print(f"[INFO] found {len(dataset_test)} examples in the test set...")
@@ -127,6 +163,27 @@ def main():
     # initialize loss function and optimizer
     loss_function = criterion.to(config.DEVICE)
     opt = AdamW(unet.parameters(), lr=config.INIT_LR)
+
+    # ---------- TRAINING
+    # calculate steps per epoch for training and test set
+    num_steps_train = len(dataset_train) // config.BATCH_SIZE
+    num_steps_test = len(dataset_test) // config.BATCH_SIZE
+
+    # initialize a dictionary to store training history
+    train_history = {"train_loss": [], "test_loss": []}
+
+    print(f'[INFO] training the network...')
+
+    startTime = time.time()
+    # best_epoch , best_accuracy = 0, 0
+    for epoch in tqdm(range(config.NUM_EPOCHS)):
+
+        # training unet on data
+        total_train_loss = train(unet, train_loader, loss_function, opt)
+
+        # Once we have processed our entire training set,
+        # evaluate our model on the test set to monitor test loss and
+        # ensure that our model is not overfitting to the training set.
 
 
 if __name__ == '__main__':
