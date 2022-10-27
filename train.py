@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 from utils import config
 from utils.dataset import KITTI
+from utils.model import UNet
 
 def download_data(file):
     print(f'downloading {file}...')
@@ -93,10 +94,12 @@ def main():
     print(f"[INFO] found {len(dataset_train)} examples in the training set...")
     print(f"[INFO] found {len(dataset_test)} examples in the test set...")
 
-
     # create the training and test data loaders
+
+    # We make shuffle = True since we want samples from all classes to be uniformly present in a
+    # batch which is important for optimal learning and convergence of batch
+    # gradient-based optimization approaches.
     train_loader = DataLoader(dataset_train, shuffle=True,
-                              # since we want samples from all classes to be uniformly present in a batch which is important for optimal learning and convergence of batch gradient-based optimization approaches.
                               batch_size=config.BATCH_SIZE,
                               pin_memory=config.PIN_MEMORY,
                               num_workers=os.cpu_count())
@@ -105,6 +108,11 @@ def main():
                              pin_memory=config.PIN_MEMORY,
                              num_workers=os.cpu_count())
 
+    # initialize our UNet model:
+    # # n_channels=3 for RGB images
+    # n_classes is the number of probabilities you want to get per pixel
+    unet = UNet(n_channels=6, n_classes=3, bilinear=False).to(config.DEVICE)
+    print(unet)
 
 if __name__ == '__main__':
     main()
