@@ -7,6 +7,8 @@ import shutil
 
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+from torch import nn
+from torch.optim import AdamW
 
 from utils import config
 from utils.dataset import KITTI
@@ -113,6 +115,19 @@ def main():
     # n_classes is the number of probabilities you want to get per pixel
     unet = UNet(n_channels=6, n_classes=3, bilinear=False).to(config.DEVICE)
     print(unet)
+
+    # choosing which loss to train UNET with (set this in config file)
+    if config.LOSS == 'mse':
+        criterion = nn.MSELoss()
+    elif config.LOSS == 'l1':
+        criterion = nn.L1Loss()
+    elif config.LOSS == 'bce':
+        criterion = nn.BCELoss()
+
+    # initialize loss function and optimizer
+    loss_function = criterion.to(config.DEVICE)
+    opt = AdamW(unet.parameters(), lr=config.INIT_LR)
+
 
 if __name__ == '__main__':
     main()
