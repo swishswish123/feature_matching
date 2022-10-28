@@ -90,6 +90,23 @@ def train(unet, train_loader, loss_function, optimizer):
 
     return total_train_loss
 
+def test(unet,test_loader, loss_function):
+    # set the model in evaluation mode
+    unet.eval()
+    total_test_loss = 0
+
+    # switch off gradient computation (as during testing we don't want to get weights.
+    with torch.no_grad():
+        # loop over the validation set
+        for (input_imgs, label) in test_loader:
+            # send the input and label to the device
+            (test_input_imgs, label) = (input_imgs.to(config.DEVICE), label.to(config.DEVICE))
+
+            # make the predictions and calculate the validation loss
+            prediction = unet(test_input_imgs)
+            total_test_loss += loss_function(prediction, label)
+
+    return total_test_loss
 
 def main():
 
@@ -184,6 +201,20 @@ def main():
         # Once we have processed our entire training set,
         # evaluate our model on the test set to monitor test loss and
         # ensure that our model is not overfitting to the training set.
+        total_test_loss = test(unet, test_loader, loss_function)
+
+        # calculate the average training and validation loss
+        avg_train_loss = total_train_loss / num_steps_train
+        avg_test_loss = total_test_loss / num_steps_test
+
+        # update our training history
+        train_history["train_loss"].append(avg_train_loss.cpu().detach().numpy())
+        train_history["test_loss"].append(avg_test_loss.cpu().detach().numpy())
+
+        # training indo
+        print(f'[INFO] EPOCH: {epoch + 1}/{config.NUM_EPOCHS}')
+        print("Train loss: {:.6f}, Test loss: {:.4f}".format(
+            avg_train_loss, avg_test_loss))
 
 
 if __name__ == '__main__':
