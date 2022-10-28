@@ -158,7 +158,7 @@ def main():
     elif config.LOSS == 'l1':
         criterion = nn.L1Loss()
     elif config.LOSS == 'bce':
-        criterion = nn.BCELoss()
+        criterion = nn.BCEWithLogitsLoss()
 
     # initialize loss function and optimizer
     loss_function = criterion.to(config.DEVICE)
