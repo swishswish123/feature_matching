@@ -7,6 +7,7 @@ import shutil
 import time
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
@@ -76,8 +77,8 @@ def train(unet, train_loader, loss_function, optimizer):
         prediction = unet(input_imgs)
 
         # compute loss between model prediction and ground truth label
-        print(f'label min: {torch.min(label)}, max of label: {torch.max(label)}')
-        print(f'label min: {torch.min(prediction)}, max of label: {torch.max(prediction)}')
+        # print(f'label min: {torch.min(label)}, max of label: {torch.max(label)}')
+        # print(f'label min: {torch.min(prediction)}, max of label: {torch.max(prediction)}')
         loss = loss_function(prediction, label)
 
         # update the parameters of model
@@ -122,7 +123,7 @@ def main():
         for file in file_names.readlines():
             download_data(file[:-1])
             unzip_data(file[:-1])
-            print(file)
+            #print(file)
 
         # move all files to corresponding folder
         cleaning_data_dirs(new_data_dir)
@@ -167,7 +168,7 @@ def main():
     # # n_channels=3 for RGB images
     # n_classes is the number of probabilities you want to get per pixel
     unet = UNet(n_channels=6, n_classes=3, bilinear=False).to(config.DEVICE)
-    print(unet)
+    #print(unet)
 
     # choosing which loss to train UNET with (set this in config file)
     if config.LOSS == 'mse':
@@ -191,8 +192,8 @@ def main():
 
     print(f'[INFO] training the network...')
 
-    startTime = time.time()
-    # best_epoch , best_accuracy = 0, 0
+    start_time = time.time()
+    best_epoch , best_loss = 0, 0
     for epoch in tqdm(range(config.NUM_EPOCHS)):
 
         # training unet on data
@@ -215,6 +216,28 @@ def main():
         print(f'[INFO] EPOCH: {epoch + 1}/{config.NUM_EPOCHS}')
         print("Train loss: {:.6f}, Test loss: {:.4f}".format(
             avg_train_loss, avg_test_loss))
+
+        # saving model
+        if avg_test_loss < best_loss:
+            best_loss = avg_test_loss
+            best_epoch = epoch
+            torch.save(unet.state_dict(), config.MODEL_PATH)
+
+    # display the total time needed to perform the training
+    end_time = time.time()
+    print("[INFO] total time taken to train the model: {:.2f}s".format(
+        end_time - start_time))
+
+    # plot the training loss
+    plt.style.use("ggplot")
+    plt.figure()
+    plt.plot(train_history["train_loss"], label="train_loss")
+    plt.plot(train_history["test_loss"], label="test_loss")
+    plt.title("Training Loss on Dataset")
+    plt.xlabel("Epoch #")
+    plt.ylabel("Loss")
+    plt.legend(loc="lower left")
+    plt.savefig(config.PLOT_PATH)
 
 
 if __name__ == '__main__':

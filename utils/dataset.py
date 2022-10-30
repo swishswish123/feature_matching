@@ -20,7 +20,7 @@ class KITTI(Dataset):
             # each as a new training example.
             for mono_folder in ['image_02', 'image_03']:
                 img_paths = sorted(glob.glob(f'{sequence_path}/{mono_folder}/data/*.png'))
-                print(f'found {len(img_paths)} image paths for {sequence_path}/{mono_folder}')
+                # print(f'found {len(img_paths)} image paths for {sequence_path}/{mono_folder}')
                 for idx in range(len(img_paths)-2):
                     image_path_1 = img_paths[idx]
                     label_path = img_paths[idx + 1]  # middle image acts as interpolated version of images
@@ -29,7 +29,7 @@ class KITTI(Dataset):
 
     def __len__(self):
         # return the number of total samples contained in the dataset
-        print(f'found {len(self.training_triplet_paths)} examples')
+        # print(f'found {len(self.training_triplet_paths)} examples')
         return len(self.training_triplet_paths)
 
     def __getitem__(self, idx):
