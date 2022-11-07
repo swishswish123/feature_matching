@@ -125,10 +125,10 @@ def main():
     # initialise model
     unet = UNet(n_channels=6, n_classes=3, bilinear=False)
     # weights
-    checkpoint = torch.load(config.MODEL_PATH)
+    checkpoint = torch.load(config.MODEL_PATH, map_location=torch.device(config.DEVICE))
     # load weights to model
     # unet.load_state_dict(checkpoint['state_dict']).to(config.DEVICE)
-    unet.load_state_dict(checkpoint, map_location=torch.device(config.DEVICE))
+    unet.load_state_dict(checkpoint)
 
     # set model in evaluation mode
     unet.eval()
