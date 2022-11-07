@@ -6,7 +6,7 @@ DATASET_PATH = os.path.join("dataset", "kitti_raw")
 
 # define the path to the images and masks dataset
 #TRAIN_PATH = os.path.join(DATASET_PATH, "training/image_2")
-#TEST_PATH = os.path.join(DATASET_PATH, "testing/image_2")
+VAL_PATH = os.path.join("dataset", "kitti_raw_validation")
 
 # define the test split
 TEST_SPLIT = 0.15
@@ -28,10 +28,10 @@ NUM_LEVELS = 3
 # initialize learning rate, number of epochs to train for, and the
 # batch size
 INIT_LR = 0.001
-NUM_EPOCHS = 5
+NUM_EPOCHS = 6
 BATCH_SIZE = 64
 
-# define the input image dimensions- image dimensions to which our images should be resized for our model to process
+# define the input image dimensions-image dimensions to which our images should be resized for our model to process
 # them
 INPUT_IMAGE_WIDTH = 384
 INPUT_IMAGE_HEIGHT = 128
@@ -40,11 +40,11 @@ INPUT_IMAGE_HEIGHT = 128
 LOSS = 'bce'
 # -------------------- OUTPUT PARAMS
 
-# define the path to the base output directory
+# define the path to the base output_1 directory
 BASE_OUTPUT = "output"
 
-# define the path to the output serialized model, model training
+# define the path to the output_1 serialized model, model training
 # plot, and testing image paths
-MODEL_PATH = os.path.join(BASE_OUTPUT, "unet_interpolation.pth")
-PLOT_PATH = os.path.sep.join([BASE_OUTPUT, "plot.png"])
+MODEL_PATH = os.path.join(BASE_OUTPUT, "unet_interpolation.pth.tar")
+PLOT_PATH = os.path.sep.join([BASE_OUTPUT, "plot.jpg"])
 TEST_PATHS = os.path.sep.join([BASE_OUTPUT, "test_paths.txt"])

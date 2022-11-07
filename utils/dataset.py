@@ -30,7 +30,7 @@ class KITTI(Dataset):
     def __len__(self):
         # return the number of total samples contained in the dataset
         # print(f'found {len(self.training_triplet_paths)} examples')
-        return len(self.training_triplet_paths)
+        return int(len(self.training_triplet_paths)/4)
 
     def __getitem__(self, idx):
         # grab the triplet of training data:

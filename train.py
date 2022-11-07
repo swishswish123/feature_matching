@@ -87,7 +87,7 @@ def train(unet, train_loader, loss_function, optimizer):
         optimizer.step() # update model params
 
         # add the loss to the total training loss so far
-        total_train_loss += loss
+        total_train_loss += loss.item()
 
     return total_train_loss
 
@@ -105,9 +105,11 @@ def test(unet,test_loader, loss_function):
 
             # make the predictions and calculate the validation loss
             prediction = unet(test_input_imgs)
-            total_test_loss += loss_function(prediction, label)
+            loss = loss_function(prediction, label)
+            total_test_loss += loss.item()
 
     return total_test_loss
+
 
 def main():
 
@@ -115,15 +117,17 @@ def main():
     # dataset = torchvision.datasets.Kitti('dataset', train=False,transform= None, target_transform= None, transforms= None, download=True)
     new_data_dir = 'dataset/kitti_raw'
     if not os.path.exists(new_data_dir):
+        print('creating dir...')
         # make directory where data will be (inside dataset)
+        os.mkdir('dataset')
         os.mkdir(new_data_dir)
 
         # loop through each filename to download and unzip data
-        file_names = open('dataset/filenames.txt','r')
+        file_names = open('dataset/filenames.txt', 'r')
         for file in file_names.readlines():
             download_data(file[:-1])
             unzip_data(file[:-1])
-            #print(file)
+            print(file)
 
         # move all files to corresponding folder
         cleaning_data_dirs(new_data_dir)
@@ -193,7 +197,7 @@ def main():
     print(f'[INFO] training the network...')
 
     start_time = time.time()
-    best_epoch , best_loss = 0, 0
+    best_epoch , best_loss = 0, np.inf
     for epoch in tqdm(range(config.NUM_EPOCHS)):
 
         # training unet on data
@@ -209,8 +213,10 @@ def main():
         avg_test_loss = total_test_loss / num_steps_test
 
         # update our training history
-        train_history["train_loss"].append(avg_train_loss.cpu().detach().numpy())
-        train_history["test_loss"].append(avg_test_loss.cpu().detach().numpy())
+        #train_history["train_loss"].append(avg_train_loss.cpu().detach().numpy())
+        #train_history["test_loss"].append(avg_test_loss.cpu().detach().numpy())
+        train_history["train_loss"].append(avg_train_loss)
+        train_history["test_loss"].append(avg_test_loss)
 
         # training indo
         print(f'[INFO] EPOCH: {epoch + 1}/{config.NUM_EPOCHS}')
@@ -219,6 +225,7 @@ def main():
 
         # saving model
         if avg_test_loss < best_loss:
+            print('saving model...')
             best_loss = avg_test_loss
             best_epoch = epoch
             torch.save(unet.state_dict(), config.MODEL_PATH)
