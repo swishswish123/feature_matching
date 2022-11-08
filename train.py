@@ -19,6 +19,12 @@ from utils import config
 from utils.dataset import KITTI
 from utils.model import UNet
 
+def seed_everything(seed=42):
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 def download_data(file):
     print(f'downloading {file}...')
     try:
@@ -112,7 +118,10 @@ def test(unet,test_loader, loss_function):
 
 
 def main():
+    print('seeding...')
+    seed_everything()
 
+    print('downloading data...')
     # --- DATA DOWNLOAD
     # dataset = torchvision.datasets.Kitti('dataset', train=False,transform= None, target_transform= None, transforms= None, download=True)
     new_data_dir = 'dataset/kitti_raw'

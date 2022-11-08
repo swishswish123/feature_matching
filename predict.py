@@ -137,6 +137,38 @@ def main():
 
     input, label = (input.to(config.DEVICE), label.to(config.DEVICE))
 
+    #------------?
+    # [16:19] Islam, Mobarakol
+    # Enkaoua, Aureand   torch.nn.Parameter
+    # Usually pytorch doen't consider input as the gradient parameter as backpropagation
+    # doesn't need to calculate gradient for the input.
+    # In our case, we need the gradient for the input, so we force the model to generate
+    # gradient for the input by pointing them as the learning parameters (torch.nn.parameter)
+    input = torch.nn.Parameter(input)
+    # expanding dims of input so that it also has batch as first dim
+    input = input[None]
+    prediction = unet(input)
+
+    # reverse sigmoid to get logits
+    logits = torch.log(prediction / (1 - prediction))
+
+    # raster grid (4 by 4 pxl (and 3 channels))
+    raster_grid = torch.ones((3, 4, 4))
+
+    # inserting ones at raster grid location
+    target_to_gradient = torch.zeros(logits.shape).to(config.DEVICE)
+    # define pixel in interpolated image to find the correspondences
+    i = 90
+    j = 80
+    target_to_gradient[:, :, i:i + 4, j:j + 4] = raster_grid
+    target_to_gradient = target_to_gradient.to(config.DEVICE)
+
+    # Main command to generate gradient for the corresponding predicted class or pixels
+    logits.backward(target_to_gradient, retain_graph=True)
+    input_grad = input.grad.data.cpu()
+
+
+
     # iterate over the randomly selected test image paths
     for (i_batch, (input_imgs, label)) in enumerate(val_loader):
 
