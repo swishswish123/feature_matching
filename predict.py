@@ -13,6 +13,9 @@ import shutil
 import glob
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+import math
+import matplotlib.cm as cm
+import PIL
 
 def download_data(file):
     print(f'downloading {file}...')
@@ -80,6 +83,63 @@ def make_predictions(model, input, label):
     prepare_plot(input, label, prediction)
 
 
+def plot_grads_correspondences(im1,im1_pxl,im1_grad , im3,im3_pxl,im3_grad, prediction, label_pxl):
+
+    im1 = im1.detach().cpu()
+    im3 = im3.detach().cpu()
+
+    num_img = 3
+    fig, ax = plt.subplots(2, num_img, figsize=(5 * num_img, 5), subplot_kw=dict(xticks=[], yticks=[]))
+
+    label_pxl_x = label_pxl[0] + 2
+    label_pxl_y = label_pxl[1] + 2
+    # label
+    ax[0, 0].imshow(prediction[0].detach().cpu().permute(1, 2, 0))
+    ax[0, 0].plot(label_pxl_x, label_pxl_y, 'o', markersize=7, color='r')
+    text = '({},{})'.format(label_pxl_x, label_pxl_y)
+    ax[0, 0].text(label_pxl_x - 20, label_pxl_y - 20, text, color='r')
+    ax[0, 0].set_title('Interpolated')
+    # im1
+    ax[0, 1].imshow(im1.permute(1, 2, 0))
+    ax[0, 1].plot(im1_pxl[1], im1_pxl[2], 'o', markersize=7, color='r')
+    text = '({},{})'.format(im1_pxl[1], im1_pxl[2])
+    ax[0, 1].text(im1_pxl[1] - 20, im1_pxl[2] - 20, text, color='r')
+    ax[0, 1].set_title('Correspondance: 1st frame')
+    # im3
+    ax[0, 2].imshow(im3.permute(1, 2, 0))
+    ax[0, 2].plot(im3_pxl[1], im3_pxl[2], 'o', markersize=7, color='r')
+    text = '({},{})'.format(im3_pxl[1], im3_pxl[2])
+    ax[0, 2].text(im3_pxl[1] - 20, im3_pxl[2] - 20, text, color='r')
+    ax[0, 2].set_title('Correspondance: 3rd frame');
+
+    # gradients
+    ax[1, 1].imshow(im1_grad.permute(1, 2, 0), cmap=cm.gray, vmin=0, vmax=im1_grad.max())
+    ax[1, 1].set_title('Gradient: 1st frame')
+
+    ax[1, 2].imshow(im3_grad.permute(1, 2, 0), cmap=cm.gray, vmin=0, vmax=im3_grad.max())
+    ax[1, 2].set_title('Gradient: 3rd frame')
+    plt.show()
+
+def plot_matches(im1, im3, max_im1, max_im3):
+    #image1 = np.asarray(Image.open(image1_pth))
+    #image2 = np.asarray(Image.open(image2_pth))
+    #label = np.asarray(PIL.Image.open(label_pth))
+    #joined_im = np.concatenate([image1, image2], axis=1)
+    #inputs = input.detach().cpu().permute(1, 2, 0)
+    im1 = im1.detach().cpu().permute(1, 2, 0)
+    im3 = im3.detach().cpu().permute(1, 2, 0)
+
+    #joined_imgs = inputs.reshape((inputs.shape[0], inputs.shape[1] * 2, inputs.shape[2] // 2))
+    joined_im = np.concatenate([im1, im3], axis=1)
+
+    plt.figure()
+    plt.imshow(joined_im)
+    plt.plot(max_im1[2], max_im1[1],'o' ,color='red', markersize=7)
+    plt.plot(max_im3[2]+im1.shape[1], max_im3[1], 'o', color='red', markersize=7)
+
+    plt.show()
+    return
+
 def main():
 
     # make val dataset
@@ -89,7 +149,7 @@ def main():
         os.mkdir(new_data_dir)
 
     # loop through each filename to download and unzip data
-    file_names = open('dataset/filenames_val.txt', 'r')
+    file_names = open('filenames_val.txt', 'r')
     for file in file_names.readlines():
         #download_data(file[:-1])
         #unzip_data(file[:-1])
@@ -133,7 +193,7 @@ def main():
     # set model in evaluation mode
     unet.eval()
 
-    (input, label) = dataset_val[30]
+    (input, label) = dataset_val[1]
 
     input, label = (input.to(config.DEVICE), label.to(config.DEVICE))
 
@@ -146,8 +206,7 @@ def main():
     # gradient for the input by pointing them as the learning parameters (torch.nn.parameter)
     input = torch.nn.Parameter(input)
     # expanding dims of input so that it also has batch as first dim
-    input = input[None]
-    prediction = unet(input)
+    prediction = unet(input[None])
 
     # reverse sigmoid to get logits
     logits = torch.log(prediction / (1 - prediction))
@@ -158,17 +217,44 @@ def main():
     # inserting ones at raster grid location
     target_to_gradient = torch.zeros(logits.shape).to(config.DEVICE)
     # define pixel in interpolated image to find the correspondences
-    i = 90
-    j = 80
-    target_to_gradient[:, :, i:i + 4, j:j + 4] = raster_grid
+    label_pxl = [90,300]
+    grid_size = [5, 5]
+
+    start_i = label_pxl[0] - math.floor(grid_size[0]/2)
+    end_i = label_pxl[0] + math.floor(grid_size[0]/2)
+
+    start_j = label_pxl[1] - math.floor(grid_size[1]/2)
+    end_j = label_pxl[1] + math.floor(grid_size[1]/2)
+
+    target_to_gradient[:, :, start_i:end_i, start_j:end_j] = raster_grid
     target_to_gradient = target_to_gradient.to(config.DEVICE)
 
     # Main command to generate gradient for the corresponding predicted class or pixels
     logits.backward(target_to_gradient, retain_graph=True)
     input_grad = input.grad.data.cpu()
 
+    # splitting gradients on inputs back to the 2 images
+    input_grad_im1 = input_grad[:3,]
+    input_grad_im3 = input_grad[3:,]
 
+    # converting to grayscale
+    rgb2gray = transforms.Grayscale(num_output_channels=1)
+    input_grad_im1, input_grad_im3 = (rgb2gray(input_grad_im1), rgb2gray(input_grad_im3))
 
+    # finding pixels of the maximum gradient in the generated input gradient for both frames
+    max_im1 = (input_grad_im1 == torch.max(input_grad_im1)).nonzero()[0]
+    max_im3 = (input_grad_im3 == torch.max(input_grad_im3)).nonzero()[0]
+
+    print('pixel in interpolated image:', label_pxl[0], label_pxl[1])
+    print('correspondence in img1:', max_im1)
+    print('correspondence in img3:', max_im3)
+
+    plot_grads_correspondences(input[:3], max_im1, input_grad_im1, input[3:], max_im3, input_grad_im3, prediction, label_pxl)
+
+    plot_matches(input[:3], input[3:], max_im1, max_im3)
+
+    '''
+    
     # iterate over the randomly selected test image paths
     for (i_batch, (input_imgs, label)) in enumerate(val_loader):
 
@@ -176,7 +262,7 @@ def main():
         (input_imgs, label) = (input_imgs.to(config.DEVICE), label.to(config.DEVICE))
 
         make_predictions(unet, input_imgs, label)
-
+    '''
     return
 
 

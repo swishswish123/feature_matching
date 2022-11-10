@@ -131,8 +131,9 @@ def main():
         os.mkdir('dataset')
         os.mkdir(new_data_dir)
 
+    if len(os.listdir(new_data_dir)) == 0:
         # loop through each filename to download and unzip data
-        file_names = open('dataset/filenames.txt', 'r')
+        file_names = open('filenames.txt', 'r')
         for file in file_names.readlines():
             download_data(file[:-1])
             unzip_data(file[:-1])
