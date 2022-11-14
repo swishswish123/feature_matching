@@ -18,12 +18,24 @@ import torch
 from utils import config
 from utils.dataset import KITTI
 from utils.model import UNet
+from torchmetrics import StructuralSimilarityIndexMeasure
+
 
 def seed_everything(seed=42):
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+class SSIM_Loss_Lib(nn.Module):
+    def __init__(self, data_range=1):
+        super().__init__()
+        self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range)
+
+    def forward(self, img1, img2):
+        return 1 - self.ssim(img1, img2)
+
 
 def download_data(file):
     print(f'downloading {file}...')
@@ -38,7 +50,6 @@ def download_data(file):
 
 
 def unzip_data(file):
-
     try:
         print(f'unzipping {file}...')
         with zipfile.ZipFile(f'dataset/{file}.zip', 'r') as zip_ref:
@@ -50,7 +61,6 @@ def unzip_data(file):
 
 
 def cleaning_data_dirs(new_data_dir):
-
     # dirs_02 = glob.glob('dataset/*_*_*/*/image_02/data')
     # dirs_03 = glob.glob('dataset/*_*_*/*/image_03/data')
     # dirs = glob.glob('dataset/*_*_*/*/image_0[2-3]/data')
@@ -71,15 +81,20 @@ def train(unet, train_loader, loss_function, optimizer):
     unet.train()
 
     # initialize the total training loss
-    total_train_loss = 0
+    # total_train_loss = 0
+
+    ssim = StructuralSimilarityIndexMeasure(data_range=1)
+
+    train_loss = []
+    ssim_all = []
+
     # loop over the training set
     # we iterate over our trainLoader dataloader, which provides a batch of samples at a time
     for (i_batch, (input_imgs, label)) in enumerate(train_loader):
-
         # send the input to the device we are training our model on
         (input_imgs, label) = (input_imgs.to(config.DEVICE), label.to(config.DEVICE))
 
-        # pass input images through unet to get prediction of interpolation
+        # pass input seq_1 through unet to get prediction of interpolation
         prediction = unet(input_imgs)
 
         # compute loss between model prediction and ground truth label
@@ -88,19 +103,25 @@ def train(unet, train_loader, loss_function, optimizer):
         loss = loss_function(prediction, label)
 
         # update the parameters of model
-        optimizer.zero_grad() # getting rid of previously accumulated gradients from previous steps
-        loss.backward() # backpropagation
-        optimizer.step() # update model params
+        optimizer.zero_grad()  # getting rid of previously accumulated gradients from previous steps
+        loss.backward()  # backpropagation
+        optimizer.step()  # update model params
 
         # add the loss to the total training loss so far
-        total_train_loss += loss.item()
+        #total_train_loss += loss.item()
+        train_loss.append(loss.item())
+        ssim_all.append(ssim(prediction.detach().cpu(), label.detach().cpu()).item())
 
-    return total_train_loss
+    return np.mean(train_loss), np.mean(ssim_all)
 
-def test(unet,test_loader, loss_function):
+
+def test(unet, test_loader, loss_function):
     # set the model in evaluation mode
     unet.eval()
-    total_test_loss = 0
+    ssim = StructuralSimilarityIndexMeasure(data_range=1)
+
+    test_loss = []
+    ssim_all = []
 
     # switch off gradient computation (as during testing we don't want to get weights.
     with torch.no_grad():
@@ -112,9 +133,10 @@ def test(unet,test_loader, loss_function):
             # make the predictions and calculate the validation loss
             prediction = unet(test_input_imgs)
             loss = loss_function(prediction, label)
-            total_test_loss += loss.item()
+            test_loss.append(loss.item())
+            ssim_all.append(ssim(prediction.detach().cpu(), label.detach().cpu()).item())
 
-    return total_test_loss
+    return np.mean(test_loss), np.mean(ssim_all)
 
 
 def main():
@@ -145,10 +167,10 @@ def main():
     # -------- DATA PREP
     # load the image and mask filepaths in a sorted manner
 
-    #training_img_paths = sorted(glob.glob(f'{config.DATASET_PATH}/*.png'))
-    #testing_img_paths = sorted(glob.glob(f'{config.DATASET_PATH}/*.png'))
+    # training_img_paths = sorted(glob.glob(f'{config.DATASET_PATH}/*.png'))
+    # testing_img_paths = sorted(glob.glob(f'{config.DATASET_PATH}/*.png'))
     dataset_paths = glob.glob(f'{config.DATASET_PATH}/*_*')
-    split_loc = int(len(dataset_paths)/2) # finding location where to split train and test
+    split_loc = int(len(dataset_paths) / 2)  # finding location where to split train and test
     training_sequence_paths = dataset_paths[:split_loc]
     testing_sequence_paths = dataset_paths[split_loc:]
 
@@ -158,8 +180,8 @@ def main():
         transforms.ToTensor(),
     ])
 
-    dataset_train = KITTI(sequence_paths=training_sequence_paths, transform = transform_all)
-    dataset_test = KITTI(sequence_paths=testing_sequence_paths, transform = transform_all)
+    dataset_train = KITTI(sequence_paths=training_sequence_paths, transform=transform_all)
+    dataset_test = KITTI(sequence_paths=testing_sequence_paths, transform=transform_all)
 
     print(f"[INFO] found {len(dataset_train)} examples in the training set...")
     print(f"[INFO] found {len(dataset_test)} examples in the test set...")
@@ -179,10 +201,10 @@ def main():
                              num_workers=os.cpu_count())
 
     # initialize our UNet model:
-    # # n_channels=3 for RGB images
+    # # n_channels=3 for RGB seq_1
     # n_classes is the number of probabilities you want to get per pixel
     unet = UNet(n_channels=6, n_classes=3, bilinear=False).to(config.DEVICE)
-    #print(unet)
+    # print(unet)
 
     # choosing which loss to train UNET with (set this in config file)
     if config.LOSS == 'mse':
@@ -202,43 +224,60 @@ def main():
     num_steps_test = len(dataset_test) // config.BATCH_SIZE
 
     # initialize a dictionary to store training history
-    train_history = {"train_loss": [], "test_loss": []}
+    train_history = {"train_loss": [], "test_loss": [], "train_ssim":[], 'test_ssim':[]}
 
     print(f'[INFO] training the network...')
 
     start_time = time.time()
-    best_epoch , best_loss = 0, np.inf
+    best_epoch, best_loss = 0, np.inf
     for epoch in tqdm(range(config.NUM_EPOCHS)):
 
         # training unet on data
-        total_train_loss = train(unet, train_loader, loss_function, opt)
-
+        # total_train_loss = train(unet, train_loader, loss_function, opt)
+        avg_train_loss, avg_train_ssim = train(unet, train_loader, loss_function, opt)
         # Once we have processed our entire training set,
         # evaluate our model on the test set to monitor test loss and
         # ensure that our model is not overfitting to the training set.
-        total_test_loss = test(unet, test_loader, loss_function)
-
+        # total_test_loss = test(unet, test_loader, loss_function)
+        avg_test_loss, avg_test_ssim = test(unet, test_loader, loss_function)
         # calculate the average training and validation loss
-        avg_train_loss = total_train_loss / num_steps_train
-        avg_test_loss = total_test_loss / num_steps_test
+        #avg_train_loss = total_train_loss / num_steps_train
+        #avg_test_loss = total_test_loss / num_steps_test
 
         # update our training history
-        #train_history["train_loss"].append(avg_train_loss.cpu().detach().numpy())
-        #train_history["test_loss"].append(avg_test_loss.cpu().detach().numpy())
+        # train_history["train_loss"].append(avg_train_loss.cpu().detach().numpy())
+        # train_history["test_loss"].append(avg_test_loss.cpu().detach().numpy())
         train_history["train_loss"].append(avg_train_loss)
         train_history["test_loss"].append(avg_test_loss)
+
+        train_history["train_ssim"].append(avg_train_ssim)
+        train_history["test_ssim"].append(avg_test_ssim)
 
         # training indo
         print(f'[INFO] EPOCH: {epoch + 1}/{config.NUM_EPOCHS}')
         print("Train loss: {:.6f}, Test loss: {:.4f}".format(
             avg_train_loss, avg_test_loss))
+        print("Train ssim: {:.6f}, Test ssim: {:.4f}".format(
+            avg_train_ssim, avg_test_ssim))
 
         # saving model
         if avg_test_loss < best_loss:
             print('saving model...')
+
+            checkpoint = {}
+
             best_loss = avg_test_loss
-            best_epoch = epoch
-            torch.save(unet.state_dict(), config.MODEL_PATH)
+            checkpoint['best_epoch'] = epoch
+
+            checkpoint['best_train_loss'] = avg_train_loss
+            checkpoint['best_train_ssim'] = avg_train_ssim
+
+            checkpoint['best_test_loss'] = avg_test_loss
+            checkpoint['best_test_ssim'] = avg_test_ssim
+
+            checkpoint['state_dict'] = unet.state_dict()
+            # torch.save(unet.state_dict(), config.MODEL_PATH)
+            torch.save(checkpoint, config.MODEL_PATH)
 
     # display the total time needed to perform the training
     end_time = time.time()
