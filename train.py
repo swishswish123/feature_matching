@@ -94,7 +94,7 @@ def train(unet, train_loader, loss_function, optimizer):
         # send the input to the device we are training our model on
         (input_imgs, label) = (input_imgs.to(config.DEVICE), label.to(config.DEVICE))
 
-        # pass input seq_1 through unet to get prediction of interpolation
+        # pass input images through unet to get prediction of interpolation
         prediction = unet(input_imgs)
 
         # compute loss between model prediction and ground truth label
@@ -201,7 +201,7 @@ def main():
                              num_workers=os.cpu_count())
 
     # initialize our UNet model:
-    # # n_channels=3 for RGB seq_1
+    # # n_channels=3 for RGB images
     # n_classes is the number of probabilities you want to get per pixel
     unet = UNet(n_channels=6, n_classes=3, bilinear=False).to(config.DEVICE)
     # print(unet)

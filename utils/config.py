@@ -6,7 +6,8 @@ DATASET_PATH = os.path.join("dataset", "kitti_raw")
 
 # define the path to the images and masks dataset
 #TRAIN_PATH = os.path.join(DATASET_PATH, "training/image_2")
-VAL_PATH = os.path.join("dataset", "kitti_raw_validation")
+#VAL_PATH = os.path.join("dataset", "kitti_raw_validation")
+VAL_PATH = os.path.join("dataset", "endo_data")
 
 # define the test split
 TEST_SPLIT = 0.15
@@ -37,7 +38,7 @@ INPUT_IMAGE_WIDTH = 384
 INPUT_IMAGE_HEIGHT = 128
 
 # type of loss- 'mse' , 'l1', 'bce'
-LOSS = 'bce'
+LOSS = 'mse'
 # -------------------- OUTPUT PARAMS
 
 # define the path to the base output_1 directory

@@ -1,5 +1,5 @@
 from utils import config
-from utils.dataset import KITTI
+from utils.dataset import KITTI, ENDO
 from utils.model import UNet
 import torch
 import matplotlib.pyplot as plt
@@ -107,7 +107,7 @@ def make_predictions(model, input, label):
     prepare_plot(input, label, prediction)
 
 
-def plot_grads_correspondences(im1,im1_pxl,im1_grad , im3,im3_pxl,im3_grad, prediction, label_pxl):
+def plot_grads_correspondences(im1,im1_pxl,im1_grad ,matching_score_1,  im3,im3_pxl,im3_grad,matching_score_3, prediction, label_pxl):
 
     im1 = im1.detach().cpu()
     im3 = im3.detach().cpu()
@@ -128,12 +128,15 @@ def plot_grads_correspondences(im1,im1_pxl,im1_grad , im3,im3_pxl,im3_grad, pred
     ax[0, 1].plot(im1_pxl[2], im1_pxl[1], 'o', markersize=7, color='r')
     text = '({},{})'.format(im1_pxl[2], im1_pxl[1])
     ax[0, 1].text(im1_pxl[2] - 20, im1_pxl[1] - 20, text, color='r')
+    ax[0, 1].text(im1_pxl[2] - 20, im1_pxl[1] - 8, f'MS: {matching_score_1}', color='r')
     ax[0, 1].set_title('Correspondance: 1st frame')
     # im3
     ax[0, 2].imshow(im3.permute(1, 2, 0))
     ax[0, 2].plot(im3_pxl[2], im3_pxl[1], 'o', markersize=7, color='r')
     text = '({},{})'.format(im3_pxl[2], im3_pxl[1])
     ax[0, 2].text(im3_pxl[2] - 20, im3_pxl[1] - 20, text, color='r')
+    ax[0, 2].text(im3_pxl[2] - 20, im3_pxl[1] - 8, f'MS: {matching_score_3}', color='r')
+
     ax[0, 2].set_title('Correspondance: 3rd frame');
 
     # gradients
@@ -161,8 +164,7 @@ def plot_matches(im1, im3, X, Y):
     #plt.plot(max_im1[2], max_im1[1],'o' ,color='red', markersize=7)
     #plt.plot(max_im3[2]+im1.shape[1], max_im3[1], 'o', color='red', markersize=7)
     plt.plot(X,
-             Y,
-             color='red')
+             Y)
     plt.show()
 
     return
@@ -204,13 +206,7 @@ def get_kitti_data():
 def main():
 
     data = 'endo'
-
-    if data=='kitty':
-        get_kitti_data()
-        # loading val dataset
-        val_sequence_paths = glob.glob(f'{config.VAL_PATH}/*_*')
-    elif data == 'endo':
-        val_sequence_paths = glob.glob(f'{config.VAL_PATH}/*')
+    grid_size = [5, 5]
 
     # transforms that need to be done on the data when retrieved from the disk as PIL Image
     transform_all = transforms.Compose([
@@ -218,7 +214,15 @@ def main():
         transforms.ToTensor(),
     ])
 
-    dataset_val = KITTI(sequence_paths=val_sequence_paths, transform=transform_all)
+    if data=='kitty':
+        get_kitti_data()
+        # loading val dataset
+        val_sequence_paths = glob.glob(f'{config.VAL_PATH}/*_*')
+        dataset_val = KITTI(sequence_paths=val_sequence_paths, transform=transform_all)
+
+    elif data == 'endo':
+        val_sequence_paths = glob.glob(f'{config.VAL_PATH}/*')
+        dataset_val = ENDO(sequence_paths=val_sequence_paths, transform=transform_all)
 
     val_loader = DataLoader(dataset_val, shuffle=True,
                               batch_size=config.BATCH_SIZE,
@@ -231,9 +235,6 @@ def main():
     #imagePaths = np.random.choice(imagePaths, size=10)
     # load our model from disk and flash it to the current device
     print("[INFO] load up model...")
-    #unet = torch.load(config.MODEL_PATH).to(config.DEVICE)
-    #unet = torch.load('/Users/aure/Documents/CARES/feature_matching/fake_out/best_model.pth.tar').to(config.DEVICE)
-
     # initialise model
     unet = UNet(n_channels=6, n_classes=3, bilinear=False)
     # weights
@@ -242,48 +243,44 @@ def main():
     unet.load_state_dict(checkpoint['state_dict'])
     #unet.load_state_dict(checkpoint)
 
-
     # set model in evaluation mode
     unet.eval()
 
     # test performance
-    criterion = criterion = nn.MSELoss()
-    loss_function = criterion.to(config.DEVICE)
+    #criterion = criterion = nn.MSELoss()
+    #loss_function = criterion.to(config.DEVICE)
     #loss = test(unet, val_loader, loss_function)
     #print(loss)
 
+    # select image for image triplet for matching
     (input, label) = dataset_val[60]
-
     input, label = (input.to(config.DEVICE), label.to(config.DEVICE))
 
-    #------------?
-    # Enkaoua, Aureand   torch.nn.Parameter
     # Usually pytorch doen't consider input as the gradient parameter as backpropagation
     # doesn't need to calculate gradient for the input.
     # In our case, we need the gradient for the input, so we force the model to generate
     # gradient for the input by pointing them as the learning parameters (torch.nn.parameter)
     input = torch.nn.Parameter(input)
     image1 = input[:3]
+    '''
     image3 = input[3:]
+    
     # expanding dims of input so that it also has batch as first dim, then making prediction of interpolated image
     prediction = unet(input[None])
 
     # reverse sigmoid to get logits
     logits = torch.log(prediction / (1 - prediction))
-
-    grid_size = [5, 5]
-
+    '''
     # raster grid (4 by 4 pxl (and 3 channels))
     raster_grid = torch.ones((1, 3, grid_size[0], grid_size[1]))
 
-
     # define pixel in interpolated image to find the correspondences
-    p1 = np.random.random_integers(0, high=int(image1.shape[1]-grid_size[0]/2), size=(5))
-    p2 = np.random.random_integers(0, high=int(image1.shape[2]-grid_size[1]/2), size=(5))
+    px = np.random.random_integers(0, high=int(image1.shape[1]-grid_size[0]/2), size=(5))
+    py = np.random.random_integers(0, high=int(image1.shape[2]-grid_size[1]/2), size=(5))
 
     print('max p1', image1.shape[1]-grid_size[0]/2)
     print('max p2', image1.shape[2]-grid_size[1]/2)
-    label_pnts = np.array([p1, p2]).T
+    label_pnts = np.array([px, py]).T
 
     matching_scores = []
     X1 , X3 , Y1, Y3 = [],[],[],[]
@@ -292,7 +289,6 @@ def main():
         ########
 
         (input, label) = dataset_val[60]
-
         input, label = (input.to(config.DEVICE), label.to(config.DEVICE))
 
         # ------------?
@@ -330,7 +326,7 @@ def main():
         ############### DELAY?
         # time.sleep(3)
 
-        # splitting gradients on inputs back to the 2 seq_1
+        # splitting gradients on inputs back to the 2 images
         input_grad_im1 = input_grad[:3,]
         input_grad_im3 = input_grad[3:,]
 
@@ -347,7 +343,6 @@ def main():
         print('correspondence in img3:', max_im3)
 
         # matching score is defined as the ratio between the maximum gradient intensity and the mean gradient intensity within a 20 × 20 area around P
-        # IM1
         matching_score_1 = calculate_matching_score(max_im1, input_grad_im1)
         matching_score_3 = calculate_matching_score(max_im3, input_grad_im3)
 
@@ -361,7 +356,7 @@ def main():
         X3.append(max_im3[2] + image1.shape[2])
         Y3.append(max_im3[1] )
 
-        plot_grads_correspondences(image1, max_im1, input_grad_im1, image3, max_im3, input_grad_im3, prediction,
+        plot_grads_correspondences(image1, max_im1, input_grad_im1, matching_score_1, image3, max_im3, input_grad_im3,matching_score_3,  prediction,
                                    label_pxl)
 
         #pnt1 = [max_im1[0],max_im1[1]]
@@ -374,7 +369,6 @@ def main():
 
     X = np.array([X1, X3])
     Y = np.array([Y1, Y3])
-
 
     plot_matches(input[:3], input[3:], X, Y)
 

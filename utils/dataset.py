@@ -30,7 +30,47 @@ class KITTI(Dataset):
     def __len__(self):
         # return the number of total samples contained in the dataset
         # print(f'found {len(self.training_triplet_paths)} examples')
-        return int(len(self.training_triplet_paths)/4)
+        return int(len(self.training_triplet_paths))
+
+    def __getitem__(self, idx):
+        # grab the triplet of training data:
+        image_path_1 = self.training_triplet_paths[idx][0]
+        label_path = self.training_triplet_paths[idx][1]  # middle image acts as interpolated version of images
+        image_path_2 = self.training_triplet_paths[idx][2]
+
+        # load the 3 images from disk, swap its channels from BGR to RGB,
+        image1 = PIL.Image.open(image_path_1).convert('RGB')
+        image2 = PIL.Image.open(image_path_2).convert('RGB')
+        label = PIL.Image.open(label_path).convert('RGB')
+
+        # check to see if we are applying any transformations (eg. resize, convert to tensor etc
+        if self.transform:
+            image1, image2, label = self.transform(image1), self.transform(image2), self.transform(label)
+
+        # concat first and 3rd images to create input. Output is the middle img (label)
+        input = concat([image1, image2])
+        return input, label
+
+class ENDO(Dataset):
+    def __init__(self, sequence_paths=None, transform=None):
+        self.transform = transform
+        self.training_triplet_paths = []
+        # store the image and mask filepaths, and augmentation
+        # transforms
+        for sequence_path in sequence_paths:
+            #for mono_folder in ['image_02', 'image_03']:
+            img_paths = sorted(glob.glob(f'{sequence_path}/*.jpg'))
+            print(f'found {len(img_paths)} image paths for {sequence_path}')
+            for idx in range(len(img_paths)-200): # 2
+                image_path_1 = img_paths[idx]
+                label_path = img_paths[idx + 100] # 1 # middle image acts as interpolated version of images
+                image_path_2 = img_paths[idx + 200] # 2
+                self.training_triplet_paths.append([image_path_1, label_path, image_path_2])
+
+    def __len__(self):
+        # return the number of total samples contained in the dataset
+        # print(f'found {len(self.training_triplet_paths)} examples')
+        return int(len(self.training_triplet_paths))
 
     def __getitem__(self, idx):
         # grab the triplet of training data:
