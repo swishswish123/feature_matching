@@ -1,0 +1,10 @@
+# conda create --name feature_matching 
+# conda activate feature_matching 
+# conda install pytorch torchvision -c pytorch
+# pip install opencv-python
+opencv-python~=4.6.0.66
+torchvision~=0.13.1
+matplotlib
+numpy
+
+torchmetrics
