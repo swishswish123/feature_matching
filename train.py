@@ -16,7 +16,7 @@ from torch.optim import AdamW
 import torch
 
 from utils import config
-from utils.dataset import KITTI
+from utils.dataset import KITTI, ENDO
 from utils.model import UNet
 from torchmetrics import StructuralSimilarityIndexMeasure
 
@@ -139,13 +139,7 @@ def test(unet, test_loader, loss_function):
     return np.mean(test_loss), np.mean(ssim_all)
 
 
-def main():
-    print('seeding...')
-    seed_everything()
-
-    print('downloading data...')
-    # --- DATA DOWNLOAD
-    # dataset = torchvision.datasets.Kitti('dataset', train=False,transform= None, target_transform= None, transforms= None, download=True)
+def get_kitti_data():
     new_data_dir = 'dataset/kitti_raw'
     if not os.path.exists(new_data_dir):
         print('creating dir...')
@@ -164,15 +158,14 @@ def main():
         # move all files to corresponding folder
         cleaning_data_dirs(new_data_dir)
 
-    # -------- DATA PREP
-    # load the image and mask filepaths in a sorted manner
+def main():
+    print('seeding...')
+    seed_everything()
 
-    # training_img_paths = sorted(glob.glob(f'{config.DATASET_PATH}/*.png'))
-    # testing_img_paths = sorted(glob.glob(f'{config.DATASET_PATH}/*.png'))
-    dataset_paths = glob.glob(f'{config.DATASET_PATH}/*_*')
-    split_loc = int(len(dataset_paths) / 2)  # finding location where to split train and test
-    training_sequence_paths = dataset_paths[:split_loc]
-    testing_sequence_paths = dataset_paths[split_loc:]
+    print('downloading data...')
+
+    dataset = config.data
+    load_weights = True
 
     # transforms that need to be done on the data when retrieved from the disk as PIL Image
     transform_all = transforms.Compose([
@@ -180,8 +173,27 @@ def main():
         transforms.ToTensor(),
     ])
 
-    dataset_train = KITTI(sequence_paths=training_sequence_paths, transform=transform_all)
-    dataset_test = KITTI(sequence_paths=testing_sequence_paths, transform=transform_all)
+    # loading train and test dataset
+    dataset_paths = glob.glob(f'{config.DATASET_PATH}/*_*')
+    # splitting to test and train sequences
+    split_loc = int(len(dataset_paths) / 2)  # finding location where to split train and test
+    training_sequence_paths = dataset_paths[:split_loc]
+    testing_sequence_paths = dataset_paths[split_loc:]
+
+    # -------- DATA PREP
+    if config.data == 'kitti_raw':
+        # --- DATA DOWNLOAD
+        get_kitti_data()
+
+        # loading paths
+        dataset_train = KITTI(sequence_paths=training_sequence_paths, transform=transform_all)
+        dataset_test = KITTI(sequence_paths=testing_sequence_paths, transform=transform_all)
+
+    elif config.data == 'endo_data':
+
+        dataset_train = ENDO(sequence_paths=training_sequence_paths, transform=transform_all)
+        dataset_test = ENDO(sequence_paths=testing_sequence_paths, transform=transform_all)
+
 
     print(f"[INFO] found {len(dataset_train)} examples in the training set...")
     print(f"[INFO] found {len(dataset_test)} examples in the test set...")
@@ -205,6 +217,12 @@ def main():
     # n_classes is the number of probabilities you want to get per pixel
     unet = UNet(n_channels=6, n_classes=3, bilinear=False).to(config.DEVICE)
     # print(unet)
+
+    if load_weights:
+        # weights
+        checkpoint = torch.load(f'{config.BASE_OUTPUT}/unet_interpolation.pth.tar', map_location=torch.device(config.DEVICE))
+        # load weights to model
+        unet.load_state_dict(checkpoint['state_dict'])
 
     # choosing which loss to train UNET with (set this in config file)
     if config.LOSS == 'mse':
