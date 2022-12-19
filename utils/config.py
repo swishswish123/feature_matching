@@ -1,13 +1,20 @@
 import torch
 import os
 
+#data = "kitti_raw"
+data = "endo_data"
+
 # base path of dataset
-DATASET_PATH = os.path.join("dataset", "kitti_raw")
+DATASET_PATH = os.path.join("dataset", data)
 
 # define the path to the images and masks dataset
 #TRAIN_PATH = os.path.join(DATASET_PATH, "training/image_2")
 #VAL_PATH = os.path.join("dataset", "kitti_raw_validation")
-VAL_PATH = os.path.join("dataset", "endo_data")
+#VAL_PATH = os.path.join("dataset", "kitti_raw")
+
+data_val = "endo_data"
+
+VAL_PATH = os.path.join("dataset", data_val)
 
 # define the test split
 TEST_SPLIT = 0.15
@@ -42,10 +49,10 @@ LOSS = 'mse'
 # -------------------- OUTPUT PARAMS
 
 # define the path to the base output_1 directory
-BASE_OUTPUT = "output"
+BASE_OUTPUT = f"output"
 
 # define the path to the output_1 serialized model, model training
 # plot, and testing image paths
-MODEL_PATH = os.path.join(BASE_OUTPUT, "unet_interpolation.pth.tar")
-PLOT_PATH = os.path.sep.join([BASE_OUTPUT, "plot.jpg"])
+MODEL_PATH = os.path.join(BASE_OUTPUT, f"{data}_unet_interpolation.pth.tar")
+PLOT_PATH = os.path.sep.join([BASE_OUTPUT, f"{data}_plot.jpg"])
 TEST_PATHS = os.path.sep.join([BASE_OUTPUT, "test_paths.txt"])

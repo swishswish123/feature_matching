@@ -7,7 +7,7 @@ import time
 import cv2
 import numpy as np
 import os
-from urllib import request, error
+#from urllib import request, error
 import zipfile
 import shutil
 import glob
@@ -107,7 +107,7 @@ def make_predictions(model, input, label):
     prepare_plot(input, label, prediction)
 
 
-def plot_grads_correspondences(im1,im1_pxl,im1_grad ,matching_score_1,  im3,im3_pxl,im3_grad,matching_score_3, prediction, label_pxl):
+def plot_grads_correspondences(im1,im1_pxl,im1_grad ,matching_score_1,  im3,im3_pxl,im3_grad,matching_score_3, prediction,label, label_pxl):
 
     im1 = im1.detach().cpu()
     im3 = im3.detach().cpu()
@@ -118,11 +118,11 @@ def plot_grads_correspondences(im1,im1_pxl,im1_grad ,matching_score_1,  im3,im3_
     label_pxl_x = label_pxl[1]
     label_pxl_y = label_pxl[0]
     # label
-    ax[0, 0].imshow(prediction[0].detach().cpu().permute(1, 2, 0))
+    ax[0, 0].imshow(label.detach().cpu().permute(1, 2, 0)) #
     ax[0, 0].plot(label_pxl_x, label_pxl_y, 'o', markersize=7, color='r')
     text = '({},{})'.format(label_pxl_x, label_pxl_y)
     ax[0, 0].text(label_pxl_x - 20, label_pxl_y - 20, text, color='r')
-    ax[0, 0].set_title('Interpolated')
+    ax[0, 0].set_title('Label')
     # im1
     ax[0, 1].imshow(im1.permute(1, 2, 0))
     ax[0, 1].plot(im1_pxl[2], im1_pxl[1], 'o', markersize=7, color='r')
@@ -139,13 +139,21 @@ def plot_grads_correspondences(im1,im1_pxl,im1_grad ,matching_score_1,  im3,im3_
 
     ax[0, 2].set_title('Correspondance: 3rd frame');
 
-    # gradients
+    # gradients-
+    # label
+    ax[1, 0].imshow(prediction[0].detach().cpu().permute(1, 2, 0))
+    ax[1, 0].plot(label_pxl_x, label_pxl_y, 'o', markersize=7, color='r')
+    text = '({},{})'.format(label_pxl_x, label_pxl_y)
+    ax[1, 0].text(label_pxl_x - 20, label_pxl_y - 20, text, color='r')
+    ax[1, 0].set_title('Interpolated')
+
     ax[1, 1].imshow(im1_grad.permute(1, 2, 0), cmap=cm.gray, vmin=0, vmax=im1_grad.max())
     ax[1, 1].set_title('Gradient: 1st frame')
 
     ax[1, 2].imshow(im3_grad.permute(1, 2, 0), cmap=cm.gray, vmin=0, vmax=im3_grad.max())
     ax[1, 2].set_title('Gradient: 3rd frame')
     plt.show()
+
 
 def plot_matches(im1, im3, X, Y):
     #image1 = np.asarray(Image.open(image1_pth))
@@ -164,11 +172,10 @@ def plot_matches(im1, im3, X, Y):
     #plt.plot(max_im1[2], max_im1[1],'o' ,color='red', markersize=7)
     #plt.plot(max_im3[2]+im1.shape[1], max_im3[1], 'o', color='red', markersize=7)
     plt.plot(X,
-             Y)
+             Y,'*-', linewidth=0.5)
     plt.show()
 
     return
-
 
 
 def calculate_matching_score(max_im1, input_grad_im):
@@ -203,10 +210,13 @@ def get_kitti_data():
 
     cleaning_data_dirs('dataset/kitti_raw_validation')
 
+
 def main():
 
-    data = 'endo'
-    grid_size = [5, 5]
+
+    grid_size = (5, 5)
+    # how many matches to look for
+    num_matches = 15
 
     # transforms that need to be done on the data when retrieved from the disk as PIL Image
     transform_all = transforms.Compose([
@@ -214,13 +224,12 @@ def main():
         transforms.ToTensor(),
     ])
 
-    if data=='kitty':
-        get_kitti_data()
+    if config.data == 'kitti_raw':
+        #get_kitti_data()
         # loading val dataset
         val_sequence_paths = glob.glob(f'{config.VAL_PATH}/*_*')
         dataset_val = KITTI(sequence_paths=val_sequence_paths, transform=transform_all)
-
-    elif data == 'endo':
+    elif config.data == 'endo_data':
         val_sequence_paths = glob.glob(f'{config.VAL_PATH}/*')
         dataset_val = ENDO(sequence_paths=val_sequence_paths, transform=transform_all)
 
@@ -275,8 +284,8 @@ def main():
     raster_grid = torch.ones((1, 3, grid_size[0], grid_size[1]))
 
     # define pixel in interpolated image to find the correspondences
-    px = np.random.random_integers(0, high=int(image1.shape[1]-grid_size[0]/2), size=(5))
-    py = np.random.random_integers(0, high=int(image1.shape[2]-grid_size[1]/2), size=(5))
+    px = np.random.randint(0, high=int(image1.shape[1]-grid_size[0]/2), size=(num_matches))
+    py = np.random.randint(0, high=int(image1.shape[2]-grid_size[1]/2), size=(num_matches))
 
     print('max p1', image1.shape[1]-grid_size[0]/2)
     print('max p2', image1.shape[2]-grid_size[1]/2)
@@ -334,9 +343,29 @@ def main():
         rgb2gray = transforms.Grayscale(num_output_channels=1)
         input_grad_im1, input_grad_im3 = (rgb2gray(input_grad_im1), rgb2gray(input_grad_im3))
 
-        # finding pixels of the maximum gradient in the generated input gradient for both frames
-        max_im1 = (input_grad_im1 == torch.max(input_grad_im1)).nonzero()[0]
-        max_im3 = (input_grad_im3 == torch.max(input_grad_im3)).nonzero()[0]
+        method = 1 # 1 for raster, 0 for pxl-wise
+        if method == 0:
+            # finding pixels of the maximum gradient in the generated input gradient for both frames
+            max_im1 = (input_grad_im1 == torch.max(input_grad_im1)).nonzero()[0]
+            max_im3 = (input_grad_im3 == torch.max(input_grad_im3)).nonzero()[0]
+        elif method == 1:
+            avg_pooling = torch.nn.AvgPool2d(grid_size, stride=None)
+            pooled_grad_1 = avg_pooling(input_grad_im1)
+            pooled_grad_3 = avg_pooling(input_grad_im3)
+
+            # pooling to get average grad per raster
+            max_im1 = (pooled_grad_1 == torch.max(pooled_grad_1)).nonzero()[0]
+            max_im3 = (pooled_grad_3 == torch.max(pooled_grad_3)).nonzero()[0]
+
+            # finding out original index (idx*W + (W-1)/2)
+            max_im1[1] = max_im1[1] * grid_size[0] + (grid_size[0]-1) /2
+            max_im1[2] = max_im1[2] * grid_size[1] + (grid_size[1] - 1) / 2
+            #max_im1 = [max_x, max_y]
+
+            max_im3[1] = max_im3[1] * grid_size[0] + (grid_size[0]-1) /2
+            max_im3[2] = max_im3[2] * grid_size[1] + (grid_size[1] - 1) / 2
+            #max_im3 = [max_x, max_y]
+
 
         print('pixel in interpolated image:', label_pxl[0], label_pxl[1])
         print('correspondence in img1:', max_im1)
@@ -356,14 +385,13 @@ def main():
         X3.append(max_im3[2] + image1.shape[2])
         Y3.append(max_im3[1] )
 
-        plot_grads_correspondences(image1, max_im1, input_grad_im1, matching_score_1, image3, max_im3, input_grad_im3,matching_score_3,  prediction,
-                                   label_pxl)
+        #plot_grads_correspondences(image1, max_im1, input_grad_im1, matching_score_1, image3, max_im3, input_grad_im3,matching_score_3,  prediction,
+        #                           label, label_pxl)
 
         #pnt1 = [max_im1[0],max_im1[1]]
         #pnt2 = [max_im3[0]+image1.shape[1],max_im3[1]]
 
         #matches.append([pnt1, pnt2])
-
 
     print(matching_scores)
 

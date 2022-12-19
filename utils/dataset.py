@@ -59,12 +59,12 @@ class ENDO(Dataset):
         # transforms
         for sequence_path in sequence_paths:
             #for mono_folder in ['image_02', 'image_03']:
-            img_paths = sorted(glob.glob(f'{sequence_path}/*.jpg'))
+            img_paths = sorted(glob.glob(f'{sequence_path}/*.*'))
             print(f'found {len(img_paths)} image paths for {sequence_path}')
-            for idx in range(len(img_paths)-200): # 2
+            for idx in range(len(img_paths)-300): # 2
                 image_path_1 = img_paths[idx]
-                label_path = img_paths[idx + 100] # 1 # middle image acts as interpolated version of images
-                image_path_2 = img_paths[idx + 200] # 2
+                label_path = img_paths[idx + 150] # 1 # middle image acts as interpolated version of images
+                image_path_2 = img_paths[idx + 300] # 2
                 self.training_triplet_paths.append([image_path_1, label_path, image_path_2])
 
     def __len__(self):
