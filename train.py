@@ -16,7 +16,7 @@ from torch.optim import AdamW
 import torch
 
 from utils import config
-from utils.dataset import KITTI, ENDO
+from utils.dataset import KITTI, ENDO, ENDO_VIDEO
 from utils.model import UNet
 from torchmetrics import StructuralSimilarityIndexMeasure
 
@@ -164,7 +164,6 @@ def main():
 
     print('downloading data...')
 
-    dataset = config.data
     load_weights = True
 
     # transforms that need to be done on the data when retrieved from the disk as PIL Image
@@ -174,11 +173,17 @@ def main():
     ])
 
     # loading train and test dataset
-    dataset_paths = glob.glob(f'{config.DATASET_PATH}/*_*')
+    dataset_paths = glob.glob(f'{config.DATASET_PATH}/*_*/*')
+    
     # splitting to test and train sequences
-    split_loc = int(len(dataset_paths) / 2)  # finding location where to split train and test
-    training_sequence_paths = dataset_paths[:split_loc]
-    testing_sequence_paths = dataset_paths[split_loc:]
+    if len(dataset_paths) == 1:
+        print('only one vid found')
+        training_sequence_paths = dataset_paths
+        testing_sequence_paths = dataset_paths
+    else:
+        split_loc = int(len(dataset_paths) / 2)  # finding location where to split train and test
+        training_sequence_paths = dataset_paths[:split_loc]
+        testing_sequence_paths = dataset_paths[split_loc:]
 
     # -------- DATA PREP
     if config.data == 'kitti_raw':
@@ -190,10 +195,13 @@ def main():
         dataset_test = KITTI(sequence_paths=testing_sequence_paths, transform=transform_all)
 
     elif config.data == 'endo_data':
-
+        
         dataset_train = ENDO(sequence_paths=training_sequence_paths, transform=transform_all)
         dataset_test = ENDO(sequence_paths=testing_sequence_paths, transform=transform_all)
-
+        
+    elif config.data == 'endo_videos':
+        dataset_train = ENDO_VIDEO(video_paths=training_sequence_paths, transform=transform_all)
+        dataset_test = ENDO_VIDEO(video_paths=testing_sequence_paths, transform=transform_all)
 
     print(f"[INFO] found {len(dataset_train)} examples in the training set...")
     print(f"[INFO] found {len(dataset_test)} examples in the test set...")

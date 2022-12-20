@@ -1,2 +1,9 @@
 /dataset/
 /output_1/
+
+.*/
+__pycache__/
+output/
+fake_out/
+train_old.py
+.*

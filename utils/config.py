@@ -2,7 +2,7 @@ import torch
 import os
 
 #data = "kitti_raw"
-data = "endo_data"
+data = "endo_videos"
 
 # base path of dataset
 DATASET_PATH = os.path.join("dataset", data)

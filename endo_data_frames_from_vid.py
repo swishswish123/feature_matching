@@ -55,7 +55,7 @@ def main():
     # convert_vid_frames(data_path)
     project_path = Path(__file__).parent.resolve()
 
-    vid_paths = glob.glob(f'{project_path}/dataset/endo_videos/*/*.*')
+    vid_paths = glob.glob(f'{project_path}/dataset/endo_videos/*/*.mpg')
 
     if not os.path.isdir(f'{project_path}/dataset/endo_data'):
         print(f'creating {project_path}/dataset/endo_data')
